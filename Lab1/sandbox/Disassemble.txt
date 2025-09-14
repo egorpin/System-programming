@@ -1,0 +1,42 @@
+
+This GDB supports auto-downloading debuginfo from the following URLs:
+  <https://debuginfod.ubuntu.com>
+Enable debuginfod for this session? (y or [n]) [answered N; input not from terminal]
+Debuginfod has been disabled.
+To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
+Dump of assembler code for function main:
+   0x0000000000001149 <+0>:	endbr64
+   0x000000000000114d <+4>:	push   %rbp
+   0x000000000000114e <+5>:	mov    %rsp,%rbp
+   0x0000000000001151 <+8>:	lea    0xeac(%rip),%rax        # 0x2004
+   0x0000000000001158 <+15>:	mov    %rax,%rdi
+   0x000000000000115b <+18>:	call   0x1050 <puts@plt>
+   0x0000000000001160 <+23>:	mov    $0x0,%eax
+   0x0000000000001165 <+28>:	pop    %rbp
+   0x0000000000001166 <+29>:	ret
+End of assembler dump.
+
+first.o:     file format elf64-x86-64
+
+
+Disassembly of section .flat:
+
+0000000000000000 <_start-0x18>:
+   0:	50                   	push   %rax
+   1:	69 6e 67 69 6e 0a 45 	imul   $0x450a6e69,0x67(%rsi),%ebp
+   8:	67 6f                	outsl  %ds:(%esi),(%dx)
+   a:	72 0a                	jb     16 <_start-0x2>
+   c:	56                   	push   %rsi
+   d:	69 74 61 6c 69 65 76 	imul   $0x69766569,0x6c(%rcx,%riz,2),%esi
+  14:	69 
+  15:	63 68 0a             	movsxd 0xa(%rax),%ebp
+
+0000000000000018 <_start>:
+  18:	b8 04 00 00 00       	mov    $0x4,%eax
+  1d:	bb 01 00 00 00       	mov    $0x1,%ebx
+  22:	b9 00 00 00 00       	mov    $0x0,%ecx
+  27:	ba 27 00 00 00       	mov    $0x27,%edx
+  2c:	cd 80                	int    $0x80
+  2e:	b8 01 00 00 00       	mov    $0x1,%eax
+  33:	31 db                	xor    %ebx,%ebx
+  35:	cd 80                	int    $0x80
