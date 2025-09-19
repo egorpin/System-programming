@@ -2,8 +2,9 @@ format ELF64
 public _start
 public exit
 
+include '/home/egorp/cpp/System-programming/help.asm'
+
 section '.bss' writable
-    newline db 10
     place db 1
     a dq 0
     b dq 0
@@ -41,6 +42,7 @@ _start:
     add rax, [b]
 
     call print
+    call new_line
 
     call exit
 
@@ -113,13 +115,6 @@ print:
         dec rbx
         jnz .print_loop
 
-        ; Печать новой строки
-        mov rax, 1
-        mov rdi, 1
-        mov rsi, newline
-        mov rdx, 1
-        syscall
-
     pop rdi             ; восстанавливаем RDI
     pop rsi             ; восстанавливаем RSI
     pop rdx             ; восстанавливаем RDX
@@ -127,9 +122,3 @@ print:
     pop rbx             ; восстанавливаем RBX
     pop rax             ; восстанавливаем исходное значение RAX
     ret
-
-
-exit:
-    mov rax, 60         ; sys_exit
-    xor rdi, rdi        ; exit code 0
-    syscall
