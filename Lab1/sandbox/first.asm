@@ -1,7 +1,6 @@
 format ELF64
 public _start
 msg db 'Pingin', 10, 'Egor', 10, 'Vitalievich', 10, 0
-    len equ $ - msg
 
 _start:
     mov rax, 4
