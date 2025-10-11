@@ -1,155 +1,147 @@
 format ELF64
 public _start
 
+include '/home/egorp/cpp/System-programming/help.asm'
+
 section '.bss' writable
-    input_fd dq ?
-    output_fd dq ?
-    file_size dq ?
-    buffer_size = 65536
-    file_buffer rb buffer_size
-    line_ptrs rq 1000
-    line_count dq ?
-    input_filename dq ?
-    output_filename dq ?
+    input_fd     dq 0
+    output_fd    dq 0
+    bytes_read   dq 0
+    line_count   dq 0
 
 section '.data' writable
-    newline db 10
+    newline      db 0x0A
+    BUFFER_SIZE equ 65536
+    buffer       rb BUFFER_SIZE
+    line_ptrs    rq 10000
 
 section '.text' executable
-
 _start:
-    ; Получаем аргументы командной строки
-    pop rcx
-    cmp rcx, 3
-    jne exit
+    mov rax, [rsp]
+    cmp rax, 3
+    jge .open_input
+    jmp .exit
 
-    pop rsi
-    pop rdi
-    mov [input_filename], rdi
-    pop rsi
-    mov [output_filename], rsi
-
-    ; Открываем входной файл
+.open_input:
     mov rax, 2
-    mov rdi, [input_filename]
+    mov rdi, [rsp + 16]
     mov rsi, 0
+    mov rdx, 0
     syscall
+    cmp rax, 0
+    jl .exit
     mov [input_fd], rax
 
-    ; Читаем файл
     mov rax, 0
     mov rdi, [input_fd]
-    mov rsi, file_buffer
-    mov rdx, buffer_size
+    mov rsi, buffer
+    mov rdx, BUFFER_SIZE
     syscall
-    mov [file_size], rax
+    cmp rax, 0
+    jle .close_input
+    mov [bytes_read], rax
 
-    ; Закрываем входной файл
+.close_input:
     mov rax, 3
     mov rdi, [input_fd]
     syscall
 
-    ; Парсим строки
-    call parse_lines
+    cmp qword [bytes_read], 0
+    je .exit
 
-    ; Создаем выходной файл
     mov rax, 2
-    mov rdi, [output_filename]
-    mov rsi, 577
-    mov rdx, 438
+    mov rdi, [rsp + 24]
+    mov rsi, 101o
+    mov rdx, 644o
     syscall
+    cmp rax, 0
+    jl .exit
     mov [output_fd], rax
 
-    ; Записываем строки в обратном порядке
-    call write_lines
+.parse_lines:
+    mov rsi, buffer
+    mov rdi, line_ptrs
+    mov rbx, [bytes_read]
+    mov qword [line_count], 1
 
-    ; Закрываем выходной файл
-    mov rax, 3
-    mov rdi, [output_fd]
-    syscall
-
-exit:
-    mov rax, 60
-    xor rdi, rdi
-    syscall
-
-parse_lines:
-    mov rsi, file_buffer      ; текущая позиция в буфере
-    mov rdi, line_ptrs        ; массив указателей на строки
-    mov qword [line_count], 0
-    mov [rdi], rsi            ; первая строка начинается здесь
-    inc qword [line_count]
-
-    mov r8, file_buffer       ; начало буфера
-    add r8, [file_size]       ; конец буфера
+    mov [rdi], rsi
+    add rdi, 8
 
 .parse_loop:
-    cmp rsi, r8               ; дошли до конца буфера?
-    jge .parse_done
+    test rbx, rbx
+    jz .parse_done
 
-    mov al, [rsi]
-    cmp al, 10                ; символ новой строки?
-    jne .next_char
+    cmp byte [rsi], 0x0A
+    jne .next_byte
 
-    ; Нашли конец строки
-    mov byte [rsi], 0         ; заменяем \n на 0
-    inc rsi                   ; переходим к следующему символу
+    mov byte [rsi], 0
 
-    ; Сохраняем указатель на начало следующей строки
-    mov [rdi + 8], rsi
-    add rdi, 8
+
+    inc rsi
+    dec rbx
+    jz .parse_done
+
+    mov [rdi], rsi
     inc qword [line_count]
-
-    ; Проверяем не превысили ли лимит строк
-    mov rax, [line_count]
-    cmp rax, 1000
-    jge .parse_done
-
+    add rdi, 8
     jmp .parse_loop
 
-.next_char:
+.next_byte:
     inc rsi
+    dec rbx
     jmp .parse_loop
 
 .parse_done:
-    ret
-
-write_lines:
     mov rcx, [line_count]
+    test rcx, rcx
+    jz .close_output
+
     dec rcx
-    js .write_done            ; если нет строк - выходим
 
 .write_loop:
-    ; Получаем указатель на строку
+    push rcx
     mov rax, rcx
     shl rax, 3
     mov rsi, [line_ptrs + rax]
 
-    ; Вычисляем длину строкы
     mov rdi, rsi
-    xor rdx, rdx
-.find_length:
-    cmp byte [rdi], 0
-    je .write_string
-    inc rdi
-    inc rdx
-    jmp .find_length
+    call .strlen
+    mov rdx, rax
 
-.write_string:
-    ; Записываем строку
+    test rdx, rdx
+    jz .write_newline
+
     mov rax, 1
     mov rdi, [output_fd]
     syscall
 
-    ; Записываем перевод строки
+.write_newline:
     mov rax, 1
     mov rdi, [output_fd]
     mov rsi, newline
     mov rdx, 1
     syscall
 
+    pop rcx
     dec rcx
     jns .write_loop
 
-.write_done:
+.close_output:
+    mov rax, 3
+    mov rdi, [output_fd]
+    syscall
+
+.exit:
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+
+.strlen:
+    xor rax, rax
+.strlen_loop:
+    cmp byte [rdi + rax], 0
+    je .strlen_done
+    inc rax
+    jmp .strlen_loop
+.strlen_done:
     ret
