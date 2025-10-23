@@ -1,0 +1,7 @@
+ls -lh sandbox/Task_?
+
+mv sandbox/Task_1 sandbox/Task_first
+mv sandbox/Task_2 sandbox/Task_second
+mv sandbox/Task_3 sandbox/Task_third
+
+cat sandbox/Task_first >> sandbox/Task_third
