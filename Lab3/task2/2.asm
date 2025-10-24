@@ -33,7 +33,7 @@ _start:
 
     mov rax, [b]    ; al = b
 
-    div [c]        ; al = b/c, ah = остаток
+    div [c]        ; al = b/c
 
     ; (b/c)*b
     mul [b]         ; ax = (b/c)*b
@@ -52,19 +52,19 @@ atoi:
     push rdx
     push rsi
 
-    xor rax, rax        ; обнуляем результат
-    xor rcx, rcx        ; счётчик цифр
+    xor rax, rax
+    xor rcx, rcx
     xor rdx, rdx
-    ;mov rsi, rdi        ; сохраняем указатель
+    ;mov rsi, rdi
 
     .loop:
-        mov byte bl, [rsi + rdx]   ; получаем символ
-        test rbx, rbx           ; конец строки?
+        mov byte bl, [rsi + rdx]
+        test rbx, rbx
         jz .exit
 
-        sub rbx, '0'            ; преобразуем в цифру
+        sub rbx, '0'
 
-        ; Умножаем текущий результат на 10 и добавляем цифру
+
         imul rax, 10
         add rax, rbx
 
@@ -80,14 +80,14 @@ atoi:
         ret
 
 print:
-    push rax            ; сохраняем исходное значение RAX
-    push rbx            ; сохраняем RBX
-    push rcx            ; сохраняем RCX
-    push rdx            ; сохраняем RDX
-    push rsi            ; сохраняем RSI
-    push rdi            ; сохраняем RDI
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
 
-    xor rbx, rbx        ; счётчик цифр
+    xor rbx, rbx
 
     mov rcx, 10
     .loop:
@@ -103,22 +103,22 @@ print:
         add rax, '0'
         mov [place], al
 
-        ; Используем syscall
-        push rbx        ; сохраняем счётчик
-        mov rax, 1      ; sys_write
-        mov rdi, 1      ; stdout
-        mov rsi, place  ; буфер
-        mov rdx, 1      ; длина
+
+        push rbx
+        mov rax, 1
+        mov rdi, 1
+        mov rsi, place
+        mov rdx, 1
         syscall
-        pop rbx         ; восстанавливаем счётчик
+        pop rbx
 
         dec rbx
         jnz .print_loop
 
-    pop rdi             ; восстанавливаем RDI
-    pop rsi             ; восстанавливаем RSI
-    pop rdx             ; восстанавливаем RDX
-    pop rcx             ; восстанавливаем RCX
-    pop rbx             ; восстанавливаем RBX
-    pop rax             ; восстанавливаем исходное значение RAX
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
     ret
