@@ -40,14 +40,14 @@ print:
         add rax, '0'
         mov [place], al
 
-        ; Используем syscall
-        push rbx        ; сохраняем счётчик
-        mov rax, 1      ; sys_write
-        mov rdi, 1      ; stdout
-        mov rsi, place  ; буфер
-        mov rdx, 1      ; длина
+
+        push rbx
+        mov rax, 1
+        mov rdi, 1
+        mov rsi, place
+        mov rdx, 1
         syscall
-        pop rbx         ; восстанавливаем счётчик
+        pop rbx
 
         dec rbx
         jnz .print_loop
@@ -55,6 +55,6 @@ print:
         ret
 
 exit:
-    mov rax, 60         ; sys_exit
-    xor rdi, rdi        ; exit code 0
+    mov rax, 60
+    xor rdi, rdi
     syscall
