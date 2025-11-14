@@ -30,17 +30,17 @@ format ELF64
 
 	section '.bss' writable
 	direction dq 0       ;; 0 = влево, 1 = вправо
-	x dq 0              ;; Текущая координата X
-	y dq 0              ;; Текущая координата Y
+	x dq 0
+	y dq 0
 	max_x dq 0          ;; Максимальная координата X
 	max_y dq 0          ;; Максимальная координата Y
-	speed dq 10000             ;; Скорость заполнения
+	speed dq 10000
 	palette dq 1        ;; Текущий цвет (1 = CYAN, 2 = MAGENTA)
-	fill_complete dq 0  ;; 0 = заполняем CYAN, 1 = заполняем MAGENTA
+	fill_complete dq 0
 	speed_level dq 1    ;; Уровень скорости (1-5)
 
 	section '.data' writable
-	fill_char db ' '    ;; Символ для заполнения
+	fill_char db ' '
     digit db '          '
 
 	section '.text' executable
@@ -54,23 +54,23 @@ _start:
 	mov rdi, [stdscr]
 	call getmaxx
 	mov [max_x], rax
-	dec qword [max_x]    ;; Индексация с 0
+	dec qword [max_x]
 	call getmaxy
 	mov [max_y], rax
-	dec qword [max_y]    ;; Индексация с 0
+	dec qword [max_y]
 
 	call start_color
 
-	;; Пара 1: CYAN фон
-	mov rdx, 6          ;; COLOR_CYAN
-	mov rsi, 6          ;; COLOR_CYAN
-	mov rdi, 1          ;; Номер цветовой пары
+	;; CYAN
+	mov rdx, 6
+	mov rsi, 6
+	mov rdi, 1
 	call init_pair
 
-	;; Пара 2: MAGENTA фон
-	mov rdx, 5          ;; COLOR_MAGENTA
-	mov rsi, 5          ;; COLOR_MAGENTA
-	mov rdi, 2          ;; Номер цветовой пары
+	;; MAGENTA
+	mov rdx, 5
+	mov rsi, 5
+	mov rdi, 2
 	call init_pair
 
 	call refresh
@@ -78,23 +78,20 @@ _start:
 	call cbreak
 	call setrnd
 
-	;; Начинаем с ПРАВОГО верхнего угла
 	mov rax, [max_x]
-	mov [x], rax        ;; X = max_x (правый край)
-	mov qword [y], 0    ;; Y = 0 (верхний край)
-	mov qword [direction], 0  ;; Начинаем движение влево
-	mov qword [palette], 0x100  ;; Начинаем с CYAN
-	mov qword [fill_complete], 0  ;; Первое заполнение CYAN
-	mov qword [speed_level], 1 ;; Начальный уровень скорости
-	mov qword [speed], 10000          ;; Начальная скорость
+	mov [x], rax
+	mov qword [y], 0
+	mov qword [direction], 0
+	mov qword [palette], 0x100
+	mov qword [fill_complete], 0
+	mov qword [speed_level], 1
+	mov qword [speed], 10000
 
 mloop:
-	;; Перемещаем курсор в текущую позицию
-	mov rdi, [y]        ;; Y координата
-	mov rsi, [x]        ;; X координата
+	mov rdi, [y]
+	mov rsi, [x]
 	call move
 
-	;; Выбираем цвет в зависимости от fill_complete
 	mov rax, [fill_complete]
 	cmp rax, 0
 	je .cyan_fill
@@ -103,84 +100,77 @@ mloop:
 .cyan_fill:
 	;; Заполняем CYAN
 	call get_digit
-	or rax, 0x100       ;; COLOR_PAIR(1) - CYAN
+	or rax, 0x100
 	mov [palette], rax
 	jmp .print_char
 
 .magenta_fill:
 	;; Заполняем MAGENTA
 	call get_digit
-	or rax, 0x200       ;; COLOR_PAIR(2) - MAGENTA
+	or rax, 0x200
 	mov [palette], rax
 
 .print_char:
 	mov rdi, [palette]
 	call addch
 
-	;; Обновляем экран
 	call refresh
 
-	;; Двигаемся в текущем направлении
 	mov rax, [direction]
 	cmp rax, 0
 	je .move_left
 	jmp .move_right
 
 .move_left:
-	dec qword [x]       ;; Двигаемся влево
+	dec qword [x]
 	cmp qword [x], 0
-	jge .delay          ;; Если X >= 0, продолжаем
+	jge .delay
 
 	;; Достигли левого края - переходим на следующую строку
-	mov qword [x], 0    ;; Начинаем с левого края
-	inc qword [y]       ;; Переходим на следующую строку
-	mov qword [direction], 1  ;; Меняем направление на вправо
+	mov qword [x], 0
+	inc qword [y]
+	mov qword [direction], 1
 	jmp .check_bottom
 
 .move_right:
-	inc qword [x]       ;; Двигаемся вправо
+	inc qword [x]
 	mov rax, [x]
 	cmp rax, [max_x]
-	jle .delay          ;; Если X <= max_x, продолжаем
+	jle .delay
 
 	;; Достигли правого края - переходим на следующую строку
 	mov rax, [max_x]
-	mov [x], rax        ;; Начинаем с правого края
-	inc qword [y]       ;; Переходим на следующую строку
-	mov qword [direction], 0  ;; Меняем направление на влево
+	mov [x], rax
+	inc qword [y]
+	mov qword [direction], 0
 
 .check_bottom:
-	;; Проверяем, достигли ли нижнего края
 	mov rax, [y]
 	cmp rax, [max_y]
-	jle .delay          ;; Если Y <= max_y, продолжаем
+	jle .delay
 
 	;; Достигли нижнего края
 	mov rax, [fill_complete]
 	cmp rax, 0
-	jne .restart_cyan   ;; Если уже заполняли MAGENTA, начинаем заново с CYAN
+	jne .restart_cyan
 
 	;; Переключаем на заполнение MAGENTA
 	mov qword [fill_complete], 1
 	jmp .restart_position
 
 .restart_cyan:
-	;; Начинаем заново с CYAN
 	mov qword [fill_complete], 0
 
 .restart_position:
-	;; Сбрасываем позицию в правый верхний угол
 	mov rax, [max_x]
-	mov [x], rax        ;; X = max_x (правый край)
-	mov qword [y], 0    ;; Y = 0 (верхний край)
-	mov qword [direction], 0  ;; Начинаем движение влево
+	mov [x], rax
+	mov qword [y], 0
+	mov qword [direction], 0
 
 .delay:
-	;; Задержка
 	mov rdi, [speed]
 	call mydelay
 
-	;; Проверяем ввод пользователя
 	mov rdi, 1
 	call timeout
 	call getch
@@ -192,16 +182,14 @@ mloop:
 	jmp mloop
 
 .change_speed:
-	;; Циклическое изменение скорости через 5 уровней
 	mov rax, [speed_level]
 	inc rax
 	cmp rax, 6
 	jl .set_speed_level
-	mov rax, 1          ;; Циклируем обратно к уровню 1
+	mov rax, 1
 .set_speed_level:
 	mov [speed_level], rax
 
-	;; Устанавливаем скорость в зависимости от уровня
 	cmp rax, 1
 	je .speed1
 	cmp rax, 2
@@ -214,19 +202,19 @@ mloop:
 	je .speed5
 
 .speed1:
-	mov qword [speed], 10000  ;; Очень медленно
+	mov qword [speed], 10000
 	jmp mloop
 .speed2:
-	mov qword [speed], 5000  ;; Медленно
+	mov qword [speed], 5000
 	jmp mloop
 .speed3:
-	mov qword [speed], 2000      ;; Средне
+	mov qword [speed], 2000
 	jmp mloop
 .speed4:
-	mov qword [speed], 1000      ;; Быстро
+	mov qword [speed], 1000
 	jmp mloop
 .speed5:
-	mov qword [speed], 500        ;; Очень быстро
+	mov qword [speed], 500
 	jmp mloop
 
 next:
@@ -234,7 +222,6 @@ next:
 	mov rdi, 0
 	call exit
 
-;;Выбираем случайную цифру
 get_digit:
 	push rcx
 	push rdx
