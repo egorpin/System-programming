@@ -24,8 +24,6 @@ format ELF64
 	extrn cbreak
 	extrn timeout
 	extrn mydelay
-	extrn setrnd
-	extrn get_random
 
 
 	section '.bss' writable
@@ -41,7 +39,6 @@ format ELF64
 
 	section '.data' writable
 	fill_char db ' '
-    digit db '          '
 
 	section '.text' executable
 
@@ -76,7 +73,6 @@ _start:
 	call refresh
 	call noecho
 	call cbreak
-	call setrnd
 
 	mov rax, [max_x]
 	mov [x], rax
@@ -99,14 +95,14 @@ mloop:
 
 .cyan_fill:
 	;; Заполняем CYAN
-	call get_digit
+	call get_space
 	or rax, 0x100
 	mov [palette], rax
 	jmp .print_char
 
 .magenta_fill:
 	;; Заполняем MAGENTA
-	call get_digit
+	call get_space
 	or rax, 0x200
 	mov [palette], rax
 
@@ -222,15 +218,6 @@ next:
 	mov rdi, 0
 	call exit
 
-get_digit:
-	push rcx
-	push rdx
-	call get_random
-	mov rcx, 10
-	xor rdx, rdx
-	div rcx
-	xor rax,rax
-	mov al, [digit + rdx]
-	pop rdx
-	pop rcx
+get_space:
+	mov rax, ' '
 	ret
