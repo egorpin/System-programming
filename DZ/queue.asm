@@ -18,21 +18,109 @@ f  db "/dev/urandom", 0
 newline db 10, 0
 space db " ", 0
 empty_msg db "Queue is empty", 10, 0
+heap_start dq 0
+current_brk dq 0
 
     section '.bss' writable
 number rq 1
 temp_buffer rb 32
-heap_start rq 1
-current_brk rq 1
 
     section '.text' executable
+
+; Инициализация кучи
+init_heap:
+    push rdi
+    push rax
+
+    mov rax, 12      ; sys_brk
+    xor rdi, rdi     ; NULL - получить текущий brk
+    syscall
+
+    mov [heap_start], rax
+    mov [current_brk], rax
+
+    pop rax
+    pop rdi
+    ret
+
+; void* brk_malloc(unsigned long size)
+brk_malloc:
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push r8
+    push r9
+    push r10
+    push r11
+
+    mov rbx, rdi    ; размер
+
+    ; Получить текущий brk
+    mov rax, 12      ; sys_brk
+    xor rdi, rdi     ; NULL
+    syscall
+
+    mov rsi, rax    ; сохранить текущий brk
+
+    ; Установить новый brk
+    add rax, rbx
+    mov rdi, rax
+    mov rax, 12      ; sys_brk
+    syscall
+
+    ; Проверить успешность
+    cmp rax, rsi
+    je .error
+
+    ; Вернуть указатель на выделенную память
+    mov rax, rsi
+    jmp .done
+
+.error:
+    xor rax, rax    ; возвращаем NULL при ошибке
+
+.done:
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    ret
+
+; void brk_free(void* ptr)
+brk_free:
+    ; Простая реализация - память освобождается только при сбросе всей кучи
+    ret
+
+; Сброс всей кучи (освобождение всей памяти)
+reset_heap:
+    push rdi
+    push rax
+
+    mov rax, 12      ; sys_brk
+    mov rdi, [heap_start]
+    syscall
+
+    mov [current_brk], rax
+
+    pop rax
+    pop rdi
+    ret
 
 ; Queue* create_queue()
 create_queue:
     push rdi
 
+    call init_heap
+
     mov rdi, 24
-    call malloc
+    call brk_malloc
     test rax, rax
     jz .error
 
@@ -69,14 +157,14 @@ free_queue:
     mov rbx, [rbx + 8]  ; node->next
 
     push rbx
-    call free
+    call brk_free
     pop rbx
 
     jmp .free_nodes
 
 .free_struct:
     mov rdi, r12
-    call free
+    call brk_free
 
 .done:
     pop r12
@@ -97,7 +185,7 @@ enqueue:
     mov r13, rsi  ; unsigned long value
 
     mov rdi, 16
-    call malloc
+    call brk_malloc
     test rax, rax
     jz .done
 
@@ -159,7 +247,7 @@ dequeue:
 
     push rax
     mov rdi, rbx
-    call free
+    call brk_free
     pop rax
     jmp .done
 
@@ -553,53 +641,4 @@ print_number:
     pop rdx
     pop rsi
     pop rdi
-    ret
-
-; void* malloc(unsigned long size)
-malloc:
-    push rbx
-    push rcx
-    push rdx
-    push rsi
-    push rdi
-    push r8
-    push r9
-    push r10
-    push r11
-
-    mov rbx, rdi
-
-    mov rax, 12
-    xor rdi, rdi
-    syscall
-    mov [current_brk], rax
-
-    mov rdi, rax
-    add rdi, rbx
-    mov rax, 12
-    syscall
-
-    cmp rax, [current_brk]
-    je .error
-
-    mov rax, [current_brk]
-    jmp .done
-
-.error:
-    xor rax, rax
-
-.done:
-    pop r11
-    pop r10
-    pop r9
-    pop r8
-    pop rdi
-    pop rsi
-    pop rdx
-    pop rcx
-    pop rbx
-    ret
-
-; void free(void* ptr)
-free:
     ret
