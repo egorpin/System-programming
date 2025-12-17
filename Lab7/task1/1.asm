@@ -23,29 +23,8 @@ section '.data' writeable
 
     cursor          db '$ ', 0
     err_cmd         db 'Command not found', 10, 0
-    err_fork        db 'Process creation failed', 10, 0
-    newline         db 10, 0
 
 section '.text' executable
-
-; Функция для вывода новой строки
-print_newline:
-    push rax
-    push rdi
-    push rsi
-    push rdx
-
-    mov rax, 1
-    mov rdi, 1
-    mov rsi, newline
-    mov rdx, 1
-    syscall
-
-    pop rdx
-    pop rsi
-    pop rdi
-    pop rax
-    ret
 
 _start:
     mov r12, rsp
@@ -62,25 +41,21 @@ _start:
         mov [environ], r12
 
     .shell_loop:
-        ; Вывод приглашения
         mov rax, 1
         mov rdi, 1
         mov rsi, cursor
         mov rdx, 2
         syscall
 
-        ; Чтение ввода пользователя
         mov rax, 0
         mov rdi, 0
         mov rsi, input_buf
         mov rdx, 255
         syscall
 
-        ; Проверка на EOF или ошибку
         cmp rax, 0
         jle exit
 
-        ; Убираем символ новой строки из ввода
         mov rcx, rax
         dec rcx
         cmp byte [input_buf + rcx], 10
@@ -90,17 +65,16 @@ _start:
     .process_input:
         mov rsi, input_buf
         mov rdi, arg_array
-        xor rcx, rcx  ; Счетчик токенов
+        xor rcx, rcx
 
     .get_tokens:
         cmp byte [rsi], ' '
         je .next_char
-        cmp byte [rsi], 9        ; табуляция
+        cmp byte [rsi], 9
         je .next_char
         cmp byte [rsi], 0
         je .all_tokens
 
-        ; Сохраняем указатель на токен
         mov [rdi + rcx*8], rsi
         inc rcx
 
@@ -124,37 +98,30 @@ _start:
         jmp .get_tokens
 
     .all_tokens:
-        ; Завершаем массив аргументов нулем
         mov qword [rdi + rcx*8], 0
 
-        ; Проверяем, есть ли токены
         cmp rcx, 0
         je .shell_loop
 
-        ; Получаем первый токен (команду)
         mov rsi, [arg_array]
 
-        ; Проверка команды exit
         mov rdi, cmd_exit
         call compare_strings
         test rax, rax
         jz exit
 
-        ; Проверка команды Run5
         mov rsi, [arg_array]
         mov rdi, cmd_run5
         call compare_strings
         test rax, rax
         jz .exec_run5
 
-        ; Проверка команды Run6
         mov rsi, [arg_array]
         mov rdi, cmd_run6
         call compare_strings
         test rax, rax
         jz .exec_run6
 
-        ; Неизвестная команда
         mov rax, 1
         mov rdi, 1
         mov rsi, err_cmd
@@ -163,7 +130,6 @@ _start:
         jmp .shell_loop
 
     .exec_run5:
-        ; Для Run5 используем предопределенные аргументы
         mov qword [arg_array], prog_run5
         mov qword [arg_array + 8], arg1_run5
         mov qword [arg_array + 16], arg2_run5
@@ -173,39 +139,31 @@ _start:
         jmp .create_process
 
     .exec_run6:
-        ; Для Run6 используем введенные аргументы
-        ; Но первый аргумент должен быть "./asm6", а не "Run6"
         mov qword [arg_array], prog_run6
 
         mov r13, prog_run6
         jmp .create_process
 
     .create_process:
-        ; Системный вызов fork
         mov rax, 57
         syscall
 
         cmp rax, 0
-        jl .fork_fail
         je .run_program
 
-        ; Родительский процесс
         mov [child_id], rax
         jmp .wait_process
 
     .run_program:
-        ; Системный вызов execve
         mov rax, 59
-        mov rdi, r13          ; filename
-        mov rsi, arg_array    ; argv
-        mov rdx, [environ]    ; envp
+        mov rdi, r13
+        mov rsi, arg_array
+        mov rdx, [environ]
         syscall
 
-        ; Если execve не удался
         call error_exit
 
     .wait_process:
-        ; Системный вызов wait4
         mov rax, 61
         mov rdi, [child_id]
         mov rsi, status
@@ -213,17 +171,6 @@ _start:
         xor r10, r10
         syscall
 
-        ; Добавляем новую строку после завершения дочернего процесса
-        call print_newline
-
-        jmp .shell_loop
-
-    .fork_fail:
-        mov rax, 1
-        mov rdi, 1
-        mov rsi, err_fork
-        mov rdx, 25
-        syscall
         jmp .shell_loop
 
 error_exit:
