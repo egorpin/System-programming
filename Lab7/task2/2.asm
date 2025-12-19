@@ -2,6 +2,22 @@ format ELF64
 
 NUM_COUNT = 584
 BUFFER_SIZE = NUM_COUNT * 4
+SORTED_SIZE = NUM_COUNT * 4
+DIGIT_COUNTS_SIZE = 10
+TEMP_BUFFER_SIZE = 64
+
+SYS_MMAP = 9
+SYS_MUNMAP = 11
+SYS_FORK = 57
+SYS_WAIT4 = 61
+SYS_EXIT = 60
+SYS_NANOSLEEP = 35
+SYS_WRITE = 1
+
+MAP_PRIVATE = 0x02
+MAP_ANONYMOUS = 0x20
+PROT_READ = 1
+PROT_WRITE = 2
 
 section '.data' writable
     msg_fork_failed db "Ошибка создания процесса", 0xA, 0
@@ -31,11 +47,10 @@ section '.data' writable
         tv_nsec4 dq 400000000
 
 section '.bss' writable
-    numbers rb BUFFER_SIZE
-
-    temp_buffer rb 64
-    sorted_array rb BUFFER_SIZE
-    digit_counts rb 10
+    numbers_ptr dq ?      ; Указатель на массив чисел
+    sorted_ptr dq ?       ; Указатель на отсортированный массив
+    digit_counts_ptr dq ? ; Указатель на массив счетчиков цифр
+    temp_buffer_ptr dq ?  ; Указатель на временный буфер
 
 section '.text' executable
 public _start
@@ -53,6 +68,48 @@ macro syscall3 number, arg1, arg2, arg3 {
     syscall
 }
 
+macro syscall6 number, arg1, arg2, arg3, arg4, arg5, arg6 {
+    mov rax, number
+    mov rdi, arg1
+    mov rsi, arg2
+    mov rdx, arg3
+    mov r10, arg4
+    mov r8, arg5
+    mov r9, arg6
+    syscall
+}
+
+allocate_memory:
+    push rdi
+    push rsi
+    push rdx
+    push r10
+    push r8
+    push r9
+
+    xor rdi, rdi
+    mov rsi, [rsp + 40]
+    mov rdx, PROT_READ or PROT_WRITE
+    mov r10, MAP_PRIVATE or MAP_ANONYMOUS
+    mov r8, -1
+    xor r9, r9
+
+    mov rax, SYS_MMAP
+    syscall
+
+    pop r9
+    pop r8
+    pop r10
+    pop rdx
+    pop rsi
+    pop rdi
+    ret
+
+free_memory:
+    mov rax, SYS_MUNMAP
+    syscall
+    ret
+
 print_string_sync:
     push rsi
     push rdx
@@ -69,7 +126,7 @@ print_string_sync:
     jmp .count_length
 
 .print:
-    mov rax, 1
+    mov rax, SYS_WRITE
     mov rdi, 1
     mov rsi, rsi
     mov rdx, rdx
@@ -90,7 +147,8 @@ print_number_sync:
 
     mov rax, rdi
     mov rbx, 10
-    lea rsi, [temp_buffer + 63]
+    mov rsi, [temp_buffer_ptr]
+    add rsi, TEMP_BUFFER_SIZE - 1
     mov byte [rsi], 0
     dec rsi
 
@@ -143,11 +201,12 @@ sum_digits:
     pop rbx
     ret
 
-random:
+random_limited:
     push rbx
     push rcx
     push rdx
 
+    ; Генерируем случайное число
     mov rax, [random_state]
     mov rbx, rax
     shl rbx, 13
@@ -162,13 +221,19 @@ random:
 
     and rax, 0x7FFFFFFF
 
+    xor rdx, rdx
+    mov rbx, 1000
+    div rbx
+
+    mov rax, rdx
+
     pop rdx
     pop rcx
     pop rbx
     ret
 
 nanosleep:
-    mov rax, 35
+    mov rax, SYS_NANOSLEEP
     syscall
     ret
 
@@ -180,7 +245,7 @@ process1:
     lea rdi, [msg_process1]
     call print_string_sync
 
-    mov rsi, numbers
+    mov rsi, [numbers_ptr]
     mov rcx, NUM_COUNT
     xor rbx, rbx
 
@@ -207,7 +272,16 @@ process1:
     lea rdi, [msg_newline]
     call print_string_sync
 
-    mov rax, 60
+    ; Освобождаем память (в дочернем процессе)
+    mov rdi, [numbers_ptr]
+    mov rsi, BUFFER_SIZE
+    call free_memory
+
+    mov rdi, [temp_buffer_ptr]
+    mov rsi, TEMP_BUFFER_SIZE
+    call free_memory
+
+    mov rax, SYS_EXIT
     xor rdi, rdi
     syscall
 
@@ -219,7 +293,7 @@ process2:
     lea rdi, [msg_process2]
     call print_string_sync
 
-    mov rsi, numbers
+    mov rsi, [numbers_ptr]
     mov rcx, NUM_COUNT
 
     mov ebx, [rsi]
@@ -241,7 +315,7 @@ process2:
     mov rsi, r8
     add rsi, 20
 
-    mov rax, numbers
+    mov rax, [numbers_ptr]
     add rax, BUFFER_SIZE
     cmp rsi, rax
     jl .valid_ptr
@@ -256,7 +330,16 @@ process2:
     lea rdi, [msg_newline]
     call print_string_sync
 
-    mov rax, 60
+    ; Освобождаем память (в дочернем процессе)
+    mov rdi, [numbers_ptr]
+    mov rsi, BUFFER_SIZE
+    call free_memory
+
+    mov rdi, [temp_buffer_ptr]
+    mov rsi, TEMP_BUFFER_SIZE
+    call free_memory
+
+    mov rax, SYS_EXIT
     xor rdi, rdi
     syscall
 
@@ -268,8 +351,8 @@ process3:
     lea rdi, [msg_process3]
     call print_string_sync
 
-    mov rsi, numbers
-    mov rdi, sorted_array
+    mov rsi, [numbers_ptr]
+    mov rdi, [sorted_ptr]
     mov rcx, NUM_COUNT
 .copy_loop:
     mov eax, [rsi]
@@ -285,7 +368,7 @@ process3:
 
 .outer_loop:
     mov rbx, rcx
-    mov rdi, sorted_array
+    mov rdi, [sorted_ptr]
 
 .inner_loop:
     mov eax, [rdi]
@@ -310,7 +393,7 @@ process3:
     mov rbx, 4
     div rbx
 
-    mov rsi, sorted_array
+    mov rsi, [sorted_ptr]
     shl rax, 2
     add rsi, rax
     mov edi, [rsi]
@@ -319,7 +402,20 @@ process3:
     lea rdi, [msg_newline]
     call print_string_sync
 
-    mov rax, 60
+    ; Освобождаем память (в дочернем процессе)
+    mov rdi, [numbers_ptr]
+    mov rsi, BUFFER_SIZE
+    call free_memory
+
+    mov rdi, [sorted_ptr]
+    mov rsi, SORTED_SIZE
+    call free_memory
+
+    mov rdi, [temp_buffer_ptr]
+    mov rsi, TEMP_BUFFER_SIZE
+    call free_memory
+
+    mov rax, SYS_EXIT
     xor rdi, rdi
     syscall
 
@@ -331,7 +427,8 @@ process4:
     lea rdi, [msg_process4]
     call print_string_sync
 
-    mov rdi, digit_counts
+    ; Очищаем массив счетчиков цифр
+    mov rdi, [digit_counts_ptr]
     mov rcx, 10
     xor al, al
 .clear_loop:
@@ -340,7 +437,7 @@ process4:
     dec rcx
     jnz .clear_loop
 
-    mov rsi, numbers
+    mov rsi, [numbers_ptr]
     mov rcx, NUM_COUNT
 
 .count_digits_loop:
@@ -355,7 +452,7 @@ process4:
     div rbx
 
     mov rdi, rax
-    lea r8, [digit_counts]
+    mov r8, [digit_counts_ptr]
     inc byte [r8 + rdx]
 
     test rdi, rdi
@@ -366,7 +463,7 @@ process4:
     dec rcx
     jnz .count_digits_loop
 
-    mov rsi, digit_counts
+    mov rsi, [digit_counts_ptr]
     mov al, 0xFF
     mov bl, -1
     mov rcx, 0
@@ -395,34 +492,75 @@ process4:
 .found_digit:
     mov dil, bl
     add dil, '0'
-    mov [temp_buffer], dil
-    mov byte [temp_buffer + 1], 0
+    mov rsi, [temp_buffer_ptr]
+    mov [rsi], dil
+    mov byte [rsi + 1], 0
 
-    lea rdi, [temp_buffer]
+    mov rdi, rsi
     call print_string_sync
 
     lea rdi, [msg_newline]
     call print_string_sync
 
-    mov rax, 60
+    ; Освобождаем память (в дочернем процессе)
+    mov rdi, [numbers_ptr]
+    mov rsi, BUFFER_SIZE
+    call free_memory
+
+    mov rdi, [digit_counts_ptr]
+    mov rsi, DIGIT_COUNTS_SIZE
+    call free_memory
+
+    mov rdi, [temp_buffer_ptr]
+    mov rsi, TEMP_BUFFER_SIZE
+    call free_memory
+
+    mov rax, SYS_EXIT
     xor rdi, rdi
     syscall
 
 _start:
-    mov rsi, numbers
+    ; Выделяем память для массивов
+    mov rdi, BUFFER_SIZE
+    call allocate_memory
+    cmp rax, -1
+    je .mmap_error
+    mov [numbers_ptr], rax
+
+    mov rdi, SORTED_SIZE
+    call allocate_memory
+    cmp rax, -1
+    je .mmap_error
+    mov [sorted_ptr], rax
+
+    mov rdi, DIGIT_COUNTS_SIZE
+    call allocate_memory
+    cmp rax, -1
+    je .mmap_error
+    mov [digit_counts_ptr], rax
+
+    mov rdi, TEMP_BUFFER_SIZE
+    call allocate_memory
+    cmp rax, -1
+    je .mmap_error
+    mov [temp_buffer_ptr], rax
+
+    ; Заполняем массив случайными числами от 0 до 999
+    mov rsi, [numbers_ptr]
     mov rcx, NUM_COUNT
 
 .fill_loop:
-    call random
+    call random_limited
     mov [rsi], eax
     add rsi, 4
     dec rcx
     jnz .fill_loop
 
+    ; Создаем процессы
     mov r15, 4
 
 .create_processes:
-    syscall1 57
+    syscall1 SYS_FORK
 
     test rax, rax
     jz .child_process
@@ -437,13 +575,31 @@ _start:
     xor rsi, rsi
     xor rdx, rdx
     xor r10, r10
-    mov rax, 61
+    mov rax, SYS_WAIT4
     syscall
 
     test rax, rax
     jg .wait_loop
 
-    mov rax, 60
+    ; Освобождаем память в родительском процессе
+    ; (дочерние процессы уже освободили свою память)
+    mov rdi, [numbers_ptr]
+    mov rsi, BUFFER_SIZE
+    call free_memory
+
+    mov rdi, [sorted_ptr]
+    mov rsi, SORTED_SIZE
+    call free_memory
+
+    mov rdi, [digit_counts_ptr]
+    mov rsi, DIGIT_COUNTS_SIZE
+    call free_memory
+
+    mov rdi, [temp_buffer_ptr]
+    mov rsi, TEMP_BUFFER_SIZE
+    call free_memory
+
+    mov rax, SYS_EXIT
     xor rdi, rdi
     syscall
 
@@ -462,6 +618,12 @@ _start:
 .fork_error:
     lea rdi, [msg_fork_failed]
     call print_string_sync
-    mov rax, 60
+    mov rax, SYS_EXIT
+    mov rdi, 1
+    syscall
+
+.mmap_error:
+    ; Если mmap не удался, просто выходим
+    mov rax, SYS_EXIT
     mov rdi, 1
     syscall
